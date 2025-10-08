@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application d'épellation (Gestion de listes)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none;
+            -moz-user-select: none; -ms-user-select: none; user-select: none;
+            touch-action: none;
+        }
+        .letter-tile {
+            touch-action: none; cursor: grab; transition: all 0.2s ease-in-out;
+            width: 3rem; height: 3rem; font-size: 1.25rem;
+        }
+        .letter-tile:active {
+            cursor: grabbing; transform: scale(1.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .letter-slot { width: 4rem; height: 4rem; border: 2px dashed #9ca3af; }
+        .drag-over { background-color: #dbeafe; border-style: solid; border-color: #3b82f6; }
+        .dragging { opacity: 0.5; }
+        .touch-drag-clone { position: absolute; pointer-events: none; z-index: 1000; transform: scale(1.1); }
+        .slot-error { animation: shake 0.5s; border-color: #ef4444; }
+        .slot-correct { border-color: #22c55e; border-style: solid; background-color: #dcfce7; }
+        .word-success .letter-slot { animation: flash-green 1s; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); }
+        }
+        @keyframes flash-green {
+            0%, 100% { background-color: #dcfce7; } 50% { background-color: #86efac; }
+        }
+        
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: white; padding: 2rem; border-radius: 1rem;
+            width: 90%; max-width: 500px;
+        }
+        
+        @media (max-width: 640px) {
+            .letter-slot { width: 2.5rem; height: 2.5rem; }
+            .letter-tile { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app" class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-4xl mx-auto flex flex-col gap-6">
+        
+        <div id="letterBank" class="flex flex-wrap justify-center gap-2 border-b-2 border-gray-200 pb-6"></div>
+
+        <div class="flex items-center justify-center gap-4 sm:gap-8">
+            <button id="playSoundBtn" class="cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+            </button>
+            <img id="wordImage" src="" alt="Image illustrative" class="w-16 h-16 sm:w-20 sm:h-20 object-contain">
+        </div>
+        
+        <div id="wordDisplay" class="text-center text-3xl sm:text-4xl font-bold tracking-widest text-gray-700 h-12 flex items-center justify-center"></div>
+
+        <div id="answerContainer" class="flex justify-center flex-wrap gap-2 min-h-[5rem] items-center bg-gray-100 rounded-lg p-2"></div>
+
+        <div class="flex justify-center items-center gap-4 flex-wrap">
+            <button id="manageListBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold p-3 rounded-full transition-colors" title="Cliquer 5x pour ouvrir les réglages">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+            <button id="prevWordBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Précédent</button>
+            <button id="nextWordBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Suivant</button>
+            <button id="resetBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Effacer</button>
+        </div>
+    </div>
+
+    <!-- Word List Management Modal -->
+    <div id="wordListModal" class="modal-overlay hidden">
+        <div class="modal-content flex flex-col gap-4">
+            <h2 class="text-2xl font-bold text-gray-800">Gérer la liste de mots</h2>
+            <p class="text-gray-600">Entrez un mot par ligne au format : mot,lien_image (le lien est optionnel).</p>
+            <textarea id="wordListTextarea" class="w-full h-48 p-2 border border-gray-300 rounded-md" placeholder="pomme,https://example.com/pomme.gif&#10;chat&#10;soleil,https://example.com/soleil.png..."></textarea>
+            
+            <div class="flex items-center gap-2 mt-2">
+                <input type="checkbox" id="showWordCheckbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="showWordCheckbox" class="text-gray-700 select-none cursor-pointer">Afficher le mot à épeler</label>
+            </div>
+
+            <div class="flex justify-between items-center gap-2 flex-wrap mt-4">
+                <div>
+                    <button id="exportListBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Exporter</button>
+                    <label class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg cursor-pointer">
+                        Importer
+                        <input type="file" id="importListInput" class="hidden" accept=".json">
+                    </label>
+                </div>
+                <div>
+                    <button id="closeModalBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Annuler</button>
+                    <button id="saveAndApplyBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Sauvegarder</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const defaultWords = [
+                { text: 'bonjour', image: 'https://media.giphy.com/media/hvRJCLFzcasrU4Oabc/giphy.gif' },
+                { text: 'chat', image: 'https://media.giphy.com/media/VbnUQpnihPSIgIXuZv/giphy.gif' },
+                { text: 'maison', image: 'https://media.giphy.com/media/l4FGB9iiG2K32s76M/giphy.gif' },
+                { text: 'soleil', image: 'https://media.giphy.com/media/3ov9jW5LRitAGP4ef/giphy.gif' },
+                { text: 'pomme', image: 'https://media.giphy.com/media/3o7TKOCXul7Xc8aRri/giphy.gif' },
+            ];
+            const frenchAlphabet = ['a', 'à', 'b', 'c', 'd', 'e', 'é', 'è', 'ê', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
+            
+            let words = [];
+            let currentWordIndex = 0;
+            let currentWord = {};
+            let showWord = true;
+            let draggedElement = null;
+            let touchDragClone = null;
+            let gearClickCount = 0;
+            let gearClickTimer = null;
+
+            const letterBank = document.getElementById('letterBank');
+            const answerContainer = document.getElementById('answerContainer');
+            const wordImageEl = document.getElementById('wordImage');
+            const wordDisplay = document.getElementById('wordDisplay');
+            const playSoundBtn = document.getElementById('playSoundBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const nextWordBtn = document.getElementById('nextWordBtn');
+            const prevWordBtn = document.getElementById('prevWordBtn');
+            
+            // Modal elements
+            const manageListBtn = document.getElementById('manageListBtn');
+            const wordListModal = document.getElementById('wordListModal');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const wordListTextarea = document.getElementById('wordListTextarea');
+            const saveAndApplyBtn = document.getElementById('saveAndApplyBtn');
+            const exportListBtn = document.getElementById('exportListBtn');
+            const importListInput = document.getElementById('importListInput');
+            const showWordCheckbox = document.getElementById('showWordCheckbox');
+
+
+            function init() {
+                loadSettings();
+                loadWordList();
+                frenchAlphabet.forEach(letter => {
+                    const tile = document.createElement('div');
+                    tile.className = 'letter-tile bg-gray-200 text-gray-800 font-bold rounded-md flex justify-center items-center flex-shrink-0';
+                    tile.textContent = letter;
+                    tile.draggable = true;
+                    letterBank.appendChild(tile);
+                });
+                loadWord();
+                addEventListeners();
+            }
+            
+            function loadSettings() {
+                const savedShowWord = localStorage.getItem('spellingGameShowWord');
+                showWord = savedShowWord !== 'false';
+            }
+
+            function loadWordList() {
+                const savedWords = localStorage.getItem('spellingGameWordList');
+                try {
+                    words = savedWords ? JSON.parse(savedWords) : defaultWords;
+                    if (!Array.isArray(words) || words.length === 0) words = defaultWords;
+                } catch (e) {
+                    words = defaultWords;
+                }
+            }
+
+            function loadWord() {
+                if(words.length === 0) return;
+                currentWord = words[currentWordIndex];
+
+                wordImageEl.src = currentWord.image || '';
+                wordImageEl.style.display = currentWord.image ? 'block' : 'none';
+                
+                wordDisplay.textContent = showWord ? currentWord.text : '';
+                
+                answerContainer.innerHTML = '';
+                answerContainer.classList.remove('word-success');
+                
+                currentWord.text.split('').forEach((letter, index) => {
+                    const slot = document.createElement('div');
+                    slot.className = 'letter-slot rounded-md flex justify-center items-center';
+                    slot.dataset.index = index;
+                    answerContainer.appendChild(slot);
+                });
+            }
+
+            function checkAnswer() {
+                const filledSlots = answerContainer.querySelectorAll('.letter-tile');
+                if (filledSlots.length !== currentWord.text.length) return;
+
+                const userAnswer = Array.from(answerContainer.querySelectorAll('.letter-slot')).map(slot => slot.firstChild?.textContent || '').join('');
+                
+                if (userAnswer === currentWord.text) {
+                    answerContainer.classList.add('word-success');
+                }
+            }
+            
+            function handleDropLogic(dropZone) {
+                if (!draggedElement || !dropZone) return;
+
+                const sourceContainer = draggedElement.parentElement;
+                const isMovingFromSlot = sourceContainer.classList.contains('letter-slot');
+                const isDroppingOnBank = dropZone.id === 'letterBank';
+                const isDroppingOnEmptySlot = dropZone.classList.contains('letter-slot') && !dropZone.hasChildNodes();
+
+                if (isMovingFromSlot && isDroppingOnBank) {
+                    sourceContainer.classList.remove('slot-correct');
+                    draggedElement.remove();
+                } else if (isDroppingOnEmptySlot) {
+                    const slotIndex = parseInt(dropZone.dataset.index, 10);
+                    const correctLetter = currentWord.text[slotIndex];
+                    const draggedLetter = draggedElement.textContent;
+
+                    if (draggedLetter !== correctLetter) {
+                        dropZone.classList.add('slot-error');
+                        setTimeout(() => dropZone.classList.remove('slot-error'), 500);
+                        return;
+                    }
+
+                    dropZone.classList.add('slot-correct');
+                    let newTile;
+                    if (draggedElement.parentElement.id === 'letterBank') {
+                        newTile = createPlacedTile(draggedLetter);
+                    } else if (isMovingFromSlot) {
+                        sourceContainer.classList.remove('slot-correct');
+                        newTile = draggedElement;
+                    }
+                    if (newTile) dropZone.appendChild(newTile);
+                }
+                checkAnswer();
+            }
+
+            function addEventListeners() {
+                letterBank.addEventListener('dragstart', handleDragStart);
+                letterBank.addEventListener('dragend', handleDragEnd);
+                letterBank.addEventListener('touchstart', handleTouchStart, { passive: false });
+                
+                document.body.addEventListener('dragover', handleDragOver);
+                document.body.addEventListener('dragleave', handleDragLeave);
+                document.body.addEventListener('drop', handleDrop);
+                
+                document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                document.addEventListener('touchend', handleTouchEnd);
+                
+                playSoundBtn.addEventListener('click', playSound);
+                resetBtn.addEventListener('click', loadWord);
+                
+                nextWordBtn.addEventListener('click', () => {
+                    currentWordIndex = (currentWordIndex + 1) % words.length;
+                    loadWord();
+                });
+
+                prevWordBtn.addEventListener('click', () => {
+                    currentWordIndex = (currentWordIndex - 1 + words.length) % words.length;
+                    loadWord();
+                });
+
+                // Modal listeners
+                manageListBtn.addEventListener('click', () => {
+                    clearTimeout(gearClickTimer);
+                    gearClickCount++;
+                    if (gearClickCount >= 5) {
+                        openModal();
+                        gearClickCount = 0;
+                    } else {
+                        gearClickTimer = setTimeout(() => {
+                            gearClickCount = 0;
+                        }, 1500); // Reset after 1.5 seconds
+                    }
+                });
+                closeModalBtn.addEventListener('click', closeModal);
+                saveAndApplyBtn.addEventListener('click', saveAndApplySettings);
+                exportListBtn.addEventListener('click', exportList);
+                importListInput.addEventListener('change', importList);
+            }
+            
+            // Generic event handlers
+            function handleDragStart(e) {
+                if(!e.target.classList.contains('letter-tile')) return;
+                draggedElement = e.target;
+                setTimeout(() => e.target.classList.add('dragging'), 0);
+            }
+            function handleDragEnd(e) {
+                if (draggedElement) draggedElement.classList.remove('dragging');
+                draggedElement = null;
+            }
+            function handleDragOver(e) { e.preventDefault(); const zone = getDropZone(e.target); if(zone) zone.classList.add('drag-over'); }
+            function handleDragLeave(e) { const zone = getDropZone(e.target); if(zone) zone.classList.remove('drag-over'); }
+            function handleDrop(e) {
+                e.preventDefault();
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                handleDropLogic(getDropZone(e.target));
+            }
+            function handleTouchStart(e) {
+                if(!e.target.classList.contains('letter-tile')) return;
+                 e.preventDefault();
+                 draggedElement = e.target;
+                 touchDragClone = draggedElement.cloneNode(true);
+                 touchDragClone.classList.add('touch-drag-clone');
+                 document.body.appendChild(touchDragClone);
+                 positionClone(e.touches[0]);
+                 draggedElement.classList.add('dragging');
+            }
+            function handleTouchMove(e) {
+                if (!draggedElement) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                positionClone(touch);
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                const dropZone = getDropZone(elementBelow);
+                if (dropZone) dropZone.classList.add('drag-over');
+            }
+            function handleTouchEnd(e) {
+                if (!draggedElement) return;
+                const touch = e.changedTouches[0];
+                const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                handleDropLogic(getDropZone(elementBelow));
+                draggedElement.classList.remove('dragging');
+                draggedElement = null;
+                document.body.removeChild(touchDragClone);
+                touchDragClone = null;
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            }
+
+            // Helpers
+            function getDropZone(target) {
+                return target.closest('.letter-slot, #letterBank');
+            }
+            function positionClone(touch){
+                 if(!touchDragClone) return;
+                 touchDragClone.style.left = `${touch.pageX - touchDragClone.offsetWidth / 2}px`;
+                 touchDragClone.style.top = `${touch.pageY - touchDragClone.offsetHeight / 2}px`;
+            }
+             function createPlacedTile(letter){
+                const tile = document.createElement('div');
+                tile.className = 'letter-tile bg-blue-500 text-white font-bold rounded-md flex justify-center items-center';
+                tile.textContent = letter;
+                tile.draggable = true;
+                tile.addEventListener('dragstart', handleDragStart);
+                tile.addEventListener('dragend', handleDragEnd);
+                tile.addEventListener('touchstart', handleTouchStart, { passive: false });
+                return tile;
+            }
+            function playSound() {
+                if ('speechSynthesis' in window && currentWord.text) {
+                    const utterance = new SpeechSynthesisUtterance(currentWord.text);
+                    utterance.lang = 'fr-FR';
+                    utterance.rate = 0.8;
+                    window.speechSynthesis.speak(utterance);
+                }
+            }
+
+            // Modal functions
+            function openModal() {
+                wordListTextarea.value = words.map(w => {
+                    return w.image ? `${w.text},${w.image}` : w.text;
+                }).join('\n');
+                showWordCheckbox.checked = showWord;
+                wordListModal.classList.remove('hidden');
+            }
+            function closeModal() {
+                wordListModal.classList.add('hidden');
+            }
+            function saveAndApplySettings() {
+                showWord = showWordCheckbox.checked;
+                localStorage.setItem('spellingGameShowWord', showWord);
+                
+                const newWords = wordListTextarea.value.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .map(line => {
+                        const parts = line.split(',');
+                        const text = parts[0].trim().toLowerCase();
+                        const image = parts.length > 1 ? parts.slice(1).join(',').trim() : null;
+                        if(text) return { text, image };
+                        return null;
+                    }).filter(Boolean);
+                
+                if (newWords.length > 0) {
+                    words = newWords;
+                    localStorage.setItem('spellingGameWordList', JSON.stringify(words));
+                    currentWordIndex = 0;
+                }
+                loadWord();
+                closeModal();
+            }
+            function exportList() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(words, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "spelling-word-list.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            }
+            function importList(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const importedWords = JSON.parse(event.target.result);
+                        if (Array.isArray(importedWords) && importedWords.every(item => typeof item.text === 'string')) {
+                            words = importedWords;
+                            localStorage.setItem('spellingGameWordList', JSON.stringify(words));
+                            currentWordIndex = 0;
+                            loadWord();
+                            closeModal();
+                        } else {
+                            alert("Format de fichier invalide.");
+                        }
+                    } catch (err) {
+                        alert("Erreur lors de la lecture du fichier.");
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = ''; // Reset input
+            }
+            
+            init();
+        });
+    </script>
+</body>
+</html>
+
