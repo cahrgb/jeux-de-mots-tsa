@@ -2,40 +2,67 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Application d'épellation (Gestion de listes)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Application d'épellation (Optimisée pour Tactile)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+        /* --- General styles to prevent unwanted touch behavior --- */
         body {
             font-family: 'Inter', sans-serif;
-            -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none;
-            -moz-user-select: none; -ms-user-select: none; user-select: none;
+            /* Prevents text selection and callouts on long press */
+            -webkit-touch-callout: none; 
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            /* Prevents scrolling/zooming while dragging */
             touch-action: none;
+            overscroll-behavior: none; /* Prevents pull-to-refresh */
         }
+
+        /* --- Larger, more touch-friendly tiles and slots --- */
         .letter-tile {
-            touch-action: none; cursor: grab; transition: all 0.2s ease-in-out;
-            width: 3rem; height: 3rem; font-size: 1.25rem;
+            touch-action: none; 
+            cursor: grab;
+            transition: all 0.2s ease-in-out;
+            width: 3.5rem; /* Increased size */
+            height: 3.5rem; /* Increased size */
+            font-size: 1.5rem; /* Increased font size */
         }
         .letter-tile:active {
-            cursor: grabbing; transform: scale(1.1);
+            cursor: grabbing;
+            transform: scale(1.15); /* More pronounced feedback */
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
-        .letter-slot { width: 4rem; height: 4rem; border: 2px dashed #9ca3af; }
+        .letter-slot {
+            width: 4rem; /* Increased size */
+            height: 4rem; /* Increased size */
+            border: 2px dashed #9ca3af;
+        }
+
+        /* --- Visual Feedback Styles --- */
         .drag-over { background-color: #dbeafe; border-style: solid; border-color: #3b82f6; }
         .dragging { opacity: 0.5; }
-        .touch-drag-clone { position: absolute; pointer-events: none; z-index: 1000; transform: scale(1.1); }
+        .touch-drag-clone {
+            position: absolute;
+            pointer-events: none;
+            z-index: 1000;
+            transform: scale(1.15);
+        }
         .slot-error { animation: shake 0.5s; border-color: #ef4444; }
         .slot-correct { border-color: #22c55e; border-style: solid; background-color: #dcfce7; }
         .word-success .letter-slot { animation: flash-green 1s; }
 
         @keyframes shake {
-            0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); }
+            0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); }
         }
         @keyframes flash-green {
             0%, 100% { background-color: #dcfce7; } 50% { background-color: #86efac; }
         }
         
+        /* --- Modal Styles --- */
         .modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background-color: rgba(0, 0, 0, 0.5);
@@ -47,36 +74,39 @@
             width: 90%; max-width: 500px;
         }
         
+        /* --- Responsive adjustments for smaller screens --- */
         @media (max-width: 640px) {
-            .letter-slot { width: 2.5rem; height: 2.5rem; }
-            .letter-tile { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
+            .letter-slot { width: 3.25rem; height: 3.25rem; }
+            .letter-tile { width: 3rem; height: 3rem; font-size: 1.25rem; }
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-2 sm:p-4">
 
-    <div id="app" class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg w-full max-w-4xl mx-auto flex flex-col gap-6">
+    <div id="app" class="bg-white p-4 sm:p-8 rounded-2xl shadow-lg w-full max-w-4xl mx-auto flex flex-col gap-6">
         
-        <div id="letterBank" class="flex flex-wrap justify-center gap-2 border-b-2 border-gray-200 pb-6"></div>
+        <!-- Letter Bank: Scrolls horizontally on small screens -->
+        <div id="letterBank" class="flex flex-wrap justify-center gap-2 border-b-2 border-gray-200 pb-4"></div>
 
         <div class="flex items-center justify-center gap-4 sm:gap-8">
-            <button id="playSoundBtn" class="cursor-pointer">
-                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+            <button id="playSoundBtn" class="cursor-pointer p-2 rounded-full active:bg-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
             </button>
-            <img id="wordImage" src="" alt="Image illustrative" class="w-16 h-16 sm:w-20 sm:h-20 object-contain">
+            <img id="wordImage" src="" alt="Image illustrative" class="w-20 h-20 sm:w-24 sm:h-24 object-contain rounded-lg">
         </div>
         
         <div id="wordDisplay" class="text-center text-3xl sm:text-4xl font-bold tracking-widest text-gray-700 h-12 flex items-center justify-center"></div>
 
-        <div id="answerContainer" class="flex justify-center flex-wrap gap-2 min-h-[5rem] items-center bg-gray-100 rounded-lg p-2"></div>
+        <div id="answerContainer" class="flex justify-center flex-wrap gap-2 min-h-[5rem] items-center bg-gray-50 rounded-lg p-2"></div>
 
-        <div class="flex justify-center items-center gap-4 flex-wrap">
-            <button id="manageListBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold p-3 rounded-full transition-colors" title="Cliquer 5x pour ouvrir les réglages">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        <!-- Larger, more spaced-out buttons -->
+        <div class="grid grid-cols-2 sm:flex sm:justify-center items-center gap-3 sm:gap-4">
+            <button id="prevWordBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold p-4 rounded-xl transition-colors text-lg">Précédent</button>
+            <button id="nextWordBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold p-4 rounded-xl transition-colors text-lg">Suivant</button>
+            <button id="resetBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold p-4 rounded-xl transition-colors text-lg col-span-2 sm:col-span-1">Effacer</button>
+            <button id="manageListBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold p-4 rounded-full transition-colors absolute bottom-4 right-4 sm:static" title="Cliquer 5x pour ouvrir les réglages">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
-            <button id="prevWordBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Précédent</button>
-            <button id="nextWordBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Suivant</button>
-            <button id="resetBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Effacer</button>
         </div>
     </div>
 
@@ -88,21 +118,21 @@
             <textarea id="wordListTextarea" class="w-full h-48 p-2 border border-gray-300 rounded-md" placeholder="pomme,https://example.com/pomme.gif&#10;chat&#10;soleil,https://example.com/soleil.png..."></textarea>
             
             <div class="flex items-center gap-2 mt-2">
-                <input type="checkbox" id="showWordCheckbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <input type="checkbox" id="showWordCheckbox" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                 <label for="showWordCheckbox" class="text-gray-700 select-none cursor-pointer">Afficher le mot à épeler</label>
             </div>
 
             <div class="flex justify-between items-center gap-2 flex-wrap mt-4">
                 <div>
-                    <button id="exportListBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Exporter</button>
-                    <label class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg cursor-pointer">
+                    <button id="exportListBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-5 rounded-lg">Exporter</button>
+                    <label class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-5 rounded-lg cursor-pointer">
                         Importer
                         <input type="file" id="importListInput" class="hidden" accept=".json">
                     </label>
                 </div>
                 <div>
-                    <button id="closeModalBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Annuler</button>
-                    <button id="saveAndApplyBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Sauvegarder</button>
+                    <button id="closeModalBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-5 rounded-lg">Annuler</button>
+                    <button id="saveAndApplyBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-5 rounded-lg">Sauvegarder</button>
                 </div>
             </div>
         </div>
@@ -148,13 +178,23 @@
             const importListInput = document.getElementById('importListInput');
             const showWordCheckbox = document.getElementById('showWordCheckbox');
 
-
+            // --- Touch Optimization: Haptic Feedback ---
+            function triggerHapticFeedback(intensity = 50) {
+                if (navigator.vibrate) {
+                    try {
+                        navigator.vibrate(intensity);
+                    } catch (e) {
+                        console.log("Haptic feedback not supported or failed.", e);
+                    }
+                }
+            }
+            
             function init() {
                 loadSettings();
                 loadWordList();
                 frenchAlphabet.forEach(letter => {
                     const tile = document.createElement('div');
-                    tile.className = 'letter-tile bg-gray-200 text-gray-800 font-bold rounded-md flex justify-center items-center flex-shrink-0';
+                    tile.className = 'letter-tile bg-gray-200 text-gray-800 font-bold rounded-lg flex justify-center items-center flex-shrink-0';
                     tile.textContent = letter;
                     tile.draggable = true;
                     letterBank.appendChild(tile);
@@ -181,12 +221,9 @@
             function loadWord() {
                 if(words.length === 0) return;
                 currentWord = words[currentWordIndex];
-
-                wordImageEl.src = currentWord.image || '';
-                wordImageEl.style.display = currentWord.image ? 'block' : 'none';
-                
+                wordImageEl.src = currentWord.image || 'https://placehold.co/200x200/e2e8f0/e2e8f0?text=img';
+                wordImageEl.style.display = 'block';
                 wordDisplay.textContent = showWord ? currentWord.text : '';
-                
                 answerContainer.innerHTML = '';
                 answerContainer.classList.remove('word-success');
                 
@@ -206,6 +243,8 @@
                 
                 if (userAnswer === currentWord.text) {
                     answerContainer.classList.add('word-success');
+                    triggerHapticFeedback(100); // Stronger vibration for success
+                    playSound();
                 }
             }
             
@@ -218,8 +257,9 @@
                 const isDroppingOnEmptySlot = dropZone.classList.contains('letter-slot') && !dropZone.hasChildNodes();
 
                 if (isMovingFromSlot && isDroppingOnBank) {
-                    sourceContainer.classList.remove('slot-correct');
+                    sourceContainer.classList.remove('slot-correct', 'slot-error');
                     draggedElement.remove();
+                    triggerHapticFeedback(20);
                 } else if (isDroppingOnEmptySlot) {
                     const slotIndex = parseInt(dropZone.dataset.index, 10);
                     const correctLetter = currentWord.text[slotIndex];
@@ -228,10 +268,12 @@
                     if (draggedLetter !== correctLetter) {
                         dropZone.classList.add('slot-error');
                         setTimeout(() => dropZone.classList.remove('slot-error'), 500);
+                        triggerHapticFeedback([10, 50, 10]); // Error vibration pattern
                         return;
                     }
 
                     dropZone.classList.add('slot-correct');
+                    triggerHapticFeedback(50); // Haptic for correct placement
                     let newTile;
                     if (draggedElement.parentElement.id === 'letterBank') {
                         newTile = createPlacedTile(draggedLetter);
@@ -245,26 +287,34 @@
             }
 
             function addEventListeners() {
+                // Drag and Drop for Mouse
                 letterBank.addEventListener('dragstart', handleDragStart);
                 letterBank.addEventListener('dragend', handleDragEnd);
+                
+                // Touch events for mobile
                 letterBank.addEventListener('touchstart', handleTouchStart, { passive: false });
                 
+                // Generic listeners for drop zones
                 document.body.addEventListener('dragover', handleDragOver);
                 document.body.addEventListener('dragleave', handleDragLeave);
                 document.body.addEventListener('drop', handleDrop);
                 
+                // Listen on document for touch to allow dragging anywhere on screen
                 document.addEventListener('touchmove', handleTouchMove, { passive: false });
                 document.addEventListener('touchend', handleTouchEnd);
                 
-                playSoundBtn.addEventListener('click', playSound);
-                resetBtn.addEventListener('click', loadWord);
+                // Button Clicks
+                playSoundBtn.addEventListener('click', () => { triggerHapticFeedback(); playSound(); });
+                resetBtn.addEventListener('click', () => { triggerHapticFeedback(); loadWord(); });
                 
                 nextWordBtn.addEventListener('click', () => {
+                    triggerHapticFeedback();
                     currentWordIndex = (currentWordIndex + 1) % words.length;
                     loadWord();
                 });
 
                 prevWordBtn.addEventListener('click', () => {
+                    triggerHapticFeedback();
                     currentWordIndex = (currentWordIndex - 1 + words.length) % words.length;
                     loadWord();
                 });
@@ -273,13 +323,12 @@
                 manageListBtn.addEventListener('click', () => {
                     clearTimeout(gearClickTimer);
                     gearClickCount++;
+                    triggerHapticFeedback(10 * gearClickCount);
                     if (gearClickCount >= 5) {
                         openModal();
                         gearClickCount = 0;
                     } else {
-                        gearClickTimer = setTimeout(() => {
-                            gearClickCount = 0;
-                        }, 1500); // Reset after 1.5 seconds
+                        gearClickTimer = setTimeout(() => { gearClickCount = 0; }, 1500);
                     }
                 });
                 closeModalBtn.addEventListener('click', closeModal);
@@ -288,7 +337,6 @@
                 importListInput.addEventListener('change', importList);
             }
             
-            // Generic event handlers
             function handleDragStart(e) {
                 if(!e.target.classList.contains('letter-tile')) return;
                 draggedElement = e.target;
@@ -307,13 +355,14 @@
             }
             function handleTouchStart(e) {
                 if(!e.target.classList.contains('letter-tile')) return;
-                 e.preventDefault();
-                 draggedElement = e.target;
-                 touchDragClone = draggedElement.cloneNode(true);
-                 touchDragClone.classList.add('touch-drag-clone');
-                 document.body.appendChild(touchDragClone);
-                 positionClone(e.touches[0]);
-                 draggedElement.classList.add('dragging');
+                e.preventDefault();
+                draggedElement = e.target;
+                touchDragClone = draggedElement.cloneNode(true);
+                touchDragClone.classList.add('touch-drag-clone');
+                document.body.appendChild(touchDragClone);
+                positionClone(e.touches[0]);
+                draggedElement.classList.add('dragging');
+                triggerHapticFeedback(30);
             }
             function handleTouchMove(e) {
                 if (!draggedElement) return;
@@ -321,34 +370,43 @@
                 const touch = e.touches[0];
                 positionClone(touch);
                 document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                // Hide clone temporarily to find element underneath
+                touchDragClone.style.display = 'none';
                 const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                touchDragClone.style.display = '';
+                
                 const dropZone = getDropZone(elementBelow);
                 if (dropZone) dropZone.classList.add('drag-over');
             }
             function handleTouchEnd(e) {
                 if (!draggedElement) return;
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                
+                // Hide clone to find element underneath
+                touchDragClone.style.display = 'none';
                 const touch = e.changedTouches[0];
                 const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                touchDragClone.style.display = '';
+
                 handleDropLogic(getDropZone(elementBelow));
+                
                 draggedElement.classList.remove('dragging');
                 draggedElement = null;
                 document.body.removeChild(touchDragClone);
                 touchDragClone = null;
-                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
             }
 
-            // Helpers
             function getDropZone(target) {
-                return target.closest('.letter-slot, #letterBank');
+                return target ? target.closest('.letter-slot, #letterBank') : null;
             }
             function positionClone(touch){
-                 if(!touchDragClone) return;
-                 touchDragClone.style.left = `${touch.pageX - touchDragClone.offsetWidth / 2}px`;
-                 touchDragClone.style.top = `${touch.pageY - touchDragClone.offsetHeight / 2}px`;
+                if(!touchDragClone) return;
+                touchDragClone.style.left = `${touch.pageX - touchDragClone.offsetWidth / 2}px`;
+                touchDragClone.style.top = `${touch.pageY - touchDragClone.offsetHeight / 2}px`;
             }
              function createPlacedTile(letter){
                 const tile = document.createElement('div');
-                tile.className = 'letter-tile bg-blue-500 text-white font-bold rounded-md flex justify-center items-center';
+                tile.className = 'letter-tile bg-blue-500 text-white font-bold rounded-lg flex justify-center items-center';
                 tile.textContent = letter;
                 tile.draggable = true;
                 tile.addEventListener('dragstart', handleDragStart);
@@ -365,11 +423,8 @@
                 }
             }
 
-            // Modal functions
             function openModal() {
-                wordListTextarea.value = words.map(w => {
-                    return w.image ? `${w.text},${w.image}` : w.text;
-                }).join('\n');
+                wordListTextarea.value = words.map(w => w.image ? `${w.text},${w.image}` : w.text).join('\n');
                 showWordCheckbox.checked = showWord;
                 wordListModal.classList.remove('hidden');
             }
@@ -423,10 +478,11 @@
                             loadWord();
                             closeModal();
                         } else {
-                            alert("Format de fichier invalide.");
+                            // Replaced alert with a console log for better integration
+                            console.error("Format de fichier invalide.");
                         }
                     } catch (err) {
-                        alert("Erreur lors de la lecture du fichier.");
+                        console.error("Erreur lors de la lecture du fichier.", err);
                     }
                 };
                 reader.readAsText(file);
@@ -438,4 +494,6 @@
     </script>
 </body>
 </html>
+
+
 
